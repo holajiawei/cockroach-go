@@ -32,22 +32,44 @@ func TestRunServer(t *testing.T) {
 			instantiation: func(t *testing.T) (*sql.DB, func()) { return testserver.NewDBForTest(t) },
 		},
 		{
-			name:          "Secure",
+			name:          "SecureClientCert",
 			instantiation: func(t *testing.T) (*sql.DB, func()) { return testserver.NewDBForTest(t, testserver.SecureOpt()) },
+		},
+		{
+			name: "SecurePassword",
+			instantiation: func(t *testing.T) (*sql.DB, func()) {
+				return testserver.NewDBForTest(t, testserver.SecureOpt(), testserver.RootPasswordOpt("asd1828585!@$"))
+			},
 		},
 		{
 			name: "InsecureTenant",
 			instantiation: func(t *testing.T) (*sql.DB, func()) {
-				return newTenantDBForTest(t, false /* secure */, false /* proxy */)
+				return newTenantDBForTest(t, false /* secure */, false /* proxy */, "")
 			},
 		},
 		{
-			name:          "SecureTenant",
-			instantiation: func(t *testing.T) (*sql.DB, func()) { return newTenantDBForTest(t, true /* secure */, false /* proxy */) },
+			name: "SecureTenant",
+			instantiation: func(t *testing.T) (*sql.DB, func()) {
+				return newTenantDBForTest(t, true /* secure */, false /* proxy */, "")
+			},
 		},
 		{
-			name:          "SecureTenantThroughProxy",
-			instantiation: func(t *testing.T) (*sql.DB, func()) { return newTenantDBForTest(t, true /* secure */, true /* proxy */) },
+			name: "SecureTenantCustomPassword",
+			instantiation: func(t *testing.T) (*sql.DB, func()) {
+				return newTenantDBForTest(t, true /* secure */, false /* proxy */, "AS)*)ASG*")
+			},
+		},
+		{
+			name: "SecureTenantThroughProxy",
+			instantiation: func(t *testing.T) (*sql.DB, func()) {
+				return newTenantDBForTest(t, true /* secure */, true /* proxy */, "")
+			},
+		},
+		{
+			name: "SecureTenantThroughProxyCustomPassword",
+			instantiation: func(t *testing.T) (*sql.DB, func()) {
+				return newTenantDBForTest(t, true /* secure */, true /* proxy */, "Ff9as9s9s9s")
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,17 +102,16 @@ type tenantInterface interface {
 // newTenantDBForTest is a testing helper function that starts a TestServer
 // process and a SQL tenant process pointed at this TestServer. A sql connection
 // to the tenant and a cleanup function are returned.
-func newTenantDBForTest(t *testing.T, secure bool, proxy bool) (*sql.DB, func()) {
+func newTenantDBForTest(t *testing.T, secure bool, proxy bool, pw string) (*sql.DB, func()) {
 	t.Helper()
-	var (
-		ts  testserver.TestServer
-		err error
-	)
+	var opts []testserver.TestServerOpt
 	if secure {
-		ts, err = testserver.NewTestServer(testserver.SecureOpt())
-	} else {
-		ts, err = testserver.NewTestServer()
+		opts = append(opts, testserver.SecureOpt())
 	}
+	if pw != "" {
+		opts = append(opts, testserver.RootPasswordOpt(pw))
+	}
+	ts, err := testserver.NewTestServer(opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +135,7 @@ func newTenantDBForTest(t *testing.T, secure bool, proxy bool) (*sql.DB, func())
 }
 
 func TestTenant(t *testing.T) {
-	db, stop := newTenantDBForTest(t, false /* secure */, false /* proxy */)
+	db, stop := newTenantDBForTest(t, false /* secure */, false /* proxy */, "")
 	defer stop()
 	if _, err := db.Exec("SELECT 1"); err != nil {
 		t.Fatal(err)
